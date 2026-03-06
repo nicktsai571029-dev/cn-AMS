@@ -75,7 +75,7 @@
                 <div class="mb-6">
                     <label class="block text-sm font-bold text-gray-700 mb-2">選擇上課班級</label>
                     <select id="classSelect" class="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-purple-500 outline-none">
-                        <option value="">正在比對班級資料...</option>
+                        <option value="">載入班級資料中...</option>
                     </select>
                 </div>
                 <div id="studentListArea" class="space-y-4">
@@ -177,17 +177,27 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, collection, query, getDocs, addDoc, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const firebaseConfig = JSON.parse(__firebase_config);
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDM14sZDvtCqK0vJEpYzK_sZaVF_dR1u4Q",
+            authDomain: "cn-ams.firebaseapp.com",
+            projectId: "cn-ams",
+            storageBucket: "cn-ams.firebasestorage.app",
+            messagingSenderId: "308009112437",
+            appId: "1:308009112437:web:319fe0ec78975c34c4b93c"
+        };
+
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'cn-ams-school';
 
         let user = null;
         let allTeachersData = [];
         let allStudentsData = {};
         let currentAttendanceRecords = {}; 
-        let globalHistoryLogs = []; // 用於歷史資料下載
+        let globalHistoryLogs = [];
 
         const showMessage = (msg, type = "success") => {
             const box = document.getElementById('messageBox');
@@ -203,19 +213,23 @@
         };
 
         async function refreshData() {
-            if (!user) return;
+            if (!auth.currentUser) return;
             try {
                 const tSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'teachers'));
                 allTeachersData = tSnap.docs.map(doc => doc.data());
+                
                 const sSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'students'));
                 allStudentsData = {};
                 sSnap.docs.forEach(doc => {
                     const data = doc.data();
                     allStudentsData[cleanStr(data.className)] = { originalName: data.className, students: data.students };
                 });
+                
                 const currentTeacher = localStorage.getItem('currentTeacher');
                 if (currentTeacher) refreshClassDropdowns(currentTeacher);
-            } catch (error) { console.error("Sync Error:", error); }
+            } catch (error) { 
+                console.error("同步失敗:", error); 
+            }
         }
 
         function refreshClassDropdowns(teacherName) {
@@ -277,7 +291,7 @@
             btn.classList.add(`active-${activeMap[status]}`);
         };
 
-        // 即時點名邏輯
+        // 即時點名介面產生
         document.getElementById('classSelect').onchange = (e) => {
             const className = e.target.value;
             const area = document.getElementById('studentListArea');
@@ -320,7 +334,6 @@
             submitArea.classList.remove('hidden');
         };
 
-        // 學生資訊搜尋邏輯
         const studentInfoClassSelect = document.getElementById('studentInfoClassSelect');
         const studentSearchInput = document.getElementById('studentSearchInput');
         const studentContactArea = document.getElementById('studentContactArea');
@@ -377,12 +390,10 @@
         studentInfoClassSelect.onchange = updateStudentInfoDisplay;
         studentSearchInput.oninput = updateStudentInfoDisplay;
 
-        // 歷史紀錄篩選邏輯
         document.getElementById('historyRangeSelect').onchange = (e) => {
             document.getElementById('customDateRange').classList.toggle('hidden', e.target.value !== 'custom');
         };
 
-        // 下載單次記錄 Excel
         window.downloadRecordExcel = (logIndex) => {
             const log = globalHistoryLogs[logIndex];
             if (!log) return;
@@ -400,6 +411,7 @@
         };
 
         document.getElementById('btnQueryHistory').onclick = async () => {
+            if (!auth.currentUser) return;
             const histClass = document.getElementById('historyClassSelect').value;
             const range = document.getElementById('historyRangeSelect').value;
             const tableBody = document.getElementById('historyTableBody');
@@ -413,27 +425,18 @@
                 const snap = await getDocs(q);
                 let logs = snap.docs.map(doc => doc.data());
                 
-                // 權限與身份過濾
-                if (isSystemAdmin) {
-                    // 管理員身分：如果是選定特定班級則過濾班級，否則顯示全部
-                    if (histClass) {
-                        logs = logs.filter(l => l.className === histClass);
-                    }
-                } else {
-                    // 一般老師身分：
-                    // 1. 必須是老師自己點名的記錄 (修正點)
-                    // 2. 必須是老師有權限管理的班級
+                if (!isSystemAdmin) {
                     const myAllowedClasses = Array.from(document.getElementById('historyClassSelect').options).map(o => o.value).filter(v => v);
-                    
                     logs = logs.filter(l => {
                         const isMyRecord = cleanStr(l.teacher) === cleanStr(currentTeacher);
                         const isMyClass = myAllowedClasses.includes(l.className);
                         const isSelectedClass = histClass ? (l.className === histClass) : true;
                         return isMyRecord && isMyClass && isSelectedClass;
                     });
+                } else if (histClass) {
+                    logs = logs.filter(l => l.className === histClass);
                 }
 
-                // 時間範圍過濾
                 const now = new Date();
                 if (range === 'today') {
                     const todayStr = now.toLocaleDateString('zh-TW');
@@ -450,7 +453,7 @@
                     if (startInput && endInput) {
                         const start = new Date(startInput);
                         const end = new Date(endInput);
-                        end.setHours(23, 59, 59, 999); // 包含結束日當天
+                        end.setHours(23, 59, 59, 999);
                         logs = logs.filter(l => {
                             const d = new Date(l.date);
                             return d >= start && d <= end;
@@ -459,7 +462,7 @@
                 }
 
                 logs.sort((a, b) => b.timestamp - a.timestamp);
-                globalHistoryLogs = logs; // 存入全域供下載使用
+                globalHistoryLogs = logs;
 
                 if (logs.length === 0) {
                     tableBody.innerHTML = '<tr><td colspan="4" class="p-10 text-center text-gray-400">查無記錄</td></tr>';
@@ -490,20 +493,8 @@
             }
         };
 
-        // 登入與基礎初始化
-        const handleLogin = () => {
-            const name = document.getElementById('loginTeacherInput').value.trim();
-            if (!name) { showMessage("請輸入姓名", "error"); return; }
-            localStorage.setItem('currentTeacher', name);
-            document.getElementById('displayTeacherName').innerText = name;
-            refreshClassDropdowns(name);
-            document.getElementById('loginSection').classList.add('hidden');
-            document.getElementById('mainSection').classList.remove('hidden');
-            showMessage("登入成功");
-        };
-
         const processImport = async (file, type) => {
-            if (!user) return;
+            if (!auth.currentUser) return;
             const btn = document.getElementById(type === 'teachers' ? 'btnImportTeacher' : 'btnImportStudent');
             const originalText = btn.innerText;
             btn.innerText = "處理中..."; btn.disabled = true;
@@ -527,13 +518,17 @@
                     }
                     await refreshData();
                     showMessage("匯入成功");
-                } catch (err) { showMessage("匯入失敗", "error"); }
+                } catch (err) { 
+                    console.error(err);
+                    showMessage("匯入失敗，請確認檔案格式", "error"); 
+                }
                 finally { btn.innerText = originalText; btn.disabled = false; }
             };
             reader.readAsArrayBuffer(file);
         };
 
         document.getElementById('btnSubmitAttendance').onclick = async () => {
+            if (!auth.currentUser) return;
             const className = document.getElementById('classSelect').value;
             const data = allStudentsData[cleanStr(className)];
             const students = data ? data.students : [];
@@ -550,13 +545,37 @@
                 document.getElementById('classSelect').value = "";
                 document.getElementById('studentListArea').innerHTML = '<p class="text-center text-gray-500 py-10">點名完成！</p>';
                 document.getElementById('submitArea').classList.add('hidden');
-            } catch (err) { showMessage("提交失敗", "error"); }
+            } catch (err) { 
+                console.error(err);
+                showMessage("提交失敗", "error"); 
+            }
+        };
+
+        // Simplified Authentication Wrapper
+        const initAuth = async () => {
+            try {
+                // Priority: Use the system token if available
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                    console.log("Custom token auth successful");
+                    return;
+                }
+            } catch (e) {
+                console.warn("Custom token auth failed, falling back to anonymous:", e.message);
+            }
+            
+            // Fallback: Always try anonymous
+            try {
+                await signInAnonymously(auth);
+                console.log("Anonymous auth successful");
+            } catch (e) {
+                console.error("Critical Auth Error:", e.message);
+                throw e;
+            }
         };
 
         const init = async () => {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await signInWithCustomToken(auth, __initial_auth_token);
-            } else { await signInAnonymously(auth); }
+            // Setup listener first
             onAuthStateChanged(auth, async (u) => {
                 user = u;
                 if (user) {
@@ -570,8 +589,29 @@
                     }
                 }
             });
-            document.getElementById('btnLogin').onclick = handleLogin;
-            document.getElementById('btnLogout').onclick = () => { localStorage.removeItem('currentTeacher'); location.reload(); };
+
+            // Start authentication immediately
+            initAuth().catch(err => {
+                showMessage("系統連線失敗，請重新整理頁面", "error");
+            });
+
+            document.getElementById('btnLogin').onclick = () => {
+                const name = document.getElementById('loginTeacherInput').value.trim();
+                if (!name) { showMessage("請輸入姓名", "error"); return; }
+                localStorage.setItem('currentTeacher', name);
+                document.getElementById('displayTeacherName').innerText = name;
+                refreshClassDropdowns(name);
+                document.getElementById('loginSection').classList.add('hidden');
+                document.getElementById('mainSection').classList.remove('hidden');
+                showMessage("登入成功");
+                refreshData(); 
+            };
+
+            document.getElementById('btnLogout').onclick = () => { 
+                localStorage.removeItem('currentTeacher'); 
+                location.reload(); 
+            };
+
             const tabs = ['Attendance', 'Students', 'History', 'Admin'];
             tabs.forEach(t => {
                 document.getElementById(`btnTab${t}`).onclick = () => {
@@ -586,11 +626,17 @@
                     document.getElementById(`btnTab${t}`).classList.add('active-tab');
                 };
             });
+
             document.getElementById('teacherFile').onchange = (e) => processImport(e.target.files[0], 'teachers');
             document.getElementById('studentFile').onchange = (e) => processImport(e.target.files[0], 'students');
         };
-        init();
+
+        // Ensure DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
     </script>
 </body>
 </html>
-
