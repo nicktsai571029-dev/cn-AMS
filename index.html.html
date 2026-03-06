@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>長安國小課後班點名管理系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        /* 基礎樣式設定 */
+        body { font-family: "標楷體", "DFKai-SB", serif; background-color: #f3f4f6; }
+        .active-tab { border-bottom: 4px solid #7c3aed; color: #7c3aed; font-weight: bold; }
+        .hidden { display: none; }
+        
+        /* 視覺設定 */
+        .login-card { border-top: 8px solid #7c3aed; }
+        .title-purple { color: #6b21a8; }
+        .title-bright-blue { color: #4A4AFF; } 
+        
+        .status-btn { transition: all 0.2s; border: 2px solid transparent; }
+        .status-btn.active-arrive { background-color: #10b981; color: white; border-color: #059669; transform: scale(1.05); }
+        .status-btn.active-club { background-color: #3b82f6; color: white; border-color: #2563eb; transform: scale(1.05); }
+        .status-btn.active-leave { background-color: #f59e0b; color: white; border-color: #d97706; transform: scale(1.05); }
+        .status-btn.active-absent { background-color: #ef4444; color: white; border-color: #dc2626; transform: scale(1.05); }
+        
+        .container-max { max-width: 1200px; margin: 0 auto; }
+        .nav-scroll::-webkit-scrollbar { height: 4px; }
+        .nav-scroll::-webkit-scrollbar-thumb { background: #ddd; border-radius: 10px; }
+    </style>
+</head>
+<body class="p-2 md:p-6">
+
+    <div id="app" class="container-max">
+        <!-- 訊息提示元件 -->
+        <div id="messageBox" class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 rounded-lg shadow-xl hidden text-center min-w-[300px]"></div>
+
+        <!-- 登入介面 -->
+        <div id="loginSection" class="flex items-center justify-center min-h-screen">
+            <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md login-card">
+                <div class="text-center mb-8">
+                    <h1 class="text-xl font-bold title-purple">新北市長安國小</h1>
+                    <h2 class="text-3xl font-extrabold title-bright-blue mt-1">課後班點名管理系統</h2>
+                </div>
+                <div class="space-y-6">
+                    <div>
+                        <label class="block text-xl font-black text-black mb-2">老師姓名</label>
+                        <input type="text" id="loginTeacherInput" placeholder="請輸入您的姓名" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-lg">
+                    </div>
+                    <button id="btnLogin" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg transition duration-200 text-lg shadow-lg">登入系統</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 主管理介面 -->
+        <div id="mainSection" class="hidden space-y-4">
+            <div class="bg-white rounded-xl shadow-md p-4 flex flex-wrap justify-between items-center gap-4">
+                <div class="flex items-center space-x-2">
+                    <span class="text-xl font-bold title-purple">歡迎, <span id="displayTeacherName"></span> 老師</span>
+                </div>
+                <div class="flex space-x-1 overflow-x-auto nav-scroll">
+                    <button id="btnTabAttendance" class="px-4 py-2 active-tab whitespace-nowrap">即時點名</button>
+                    <button id="btnTabStudents" class="px-4 py-2 whitespace-nowrap">學生資訊</button>
+                    <button id="btnTabHistory" class="px-4 py-2 whitespace-nowrap">歷史記錄</button>
+                    <button id="btnTabAdmin" class="hidden px-4 py-2 whitespace-nowrap">系統管理</button>
+                    <button id="btnLogout" class="px-4 py-2 text-red-600 font-bold ml-4 whitespace-nowrap">登出</button>
+                </div>
+            </div>
+
+            <!-- 分頁：即時點名 -->
+            <div id="attendancePage" class="bg-white rounded-xl shadow-md p-6">
+                <div class="flex justify-between items-center mb-4 border-l-4 border-purple-600 pl-3">
+                    <h3 class="text-xl font-bold">即時點名作業</h3>
+                    <span id="adminBadge" class="hidden bg-red-100 text-red-600 text-xs px-2 py-1 rounded-full font-bold">管理員權限</span>
+                </div>
+                <div class="mb-6">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">選擇上課班級</label>
+                    <select id="classSelect" class="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-purple-500 outline-none">
+                        <option value="">正在比對班級資料...</option>
+                    </select>
+                </div>
+                <div id="studentListArea" class="space-y-4">
+                    <p class="text-center text-gray-500 py-10">請先選擇班級以載入名單</p>
+                </div>
+                <div id="submitArea" class="mt-8 hidden">
+                    <button id="btnSubmitAttendance" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl shadow-lg transition duration-200 text-xl">提交點名資料</button>
+                </div>
+            </div>
+
+            <!-- 分頁：學生資訊 -->
+            <div id="studentsPage" class="hidden bg-white rounded-xl shadow-md p-6">
+                <h3 class="text-xl font-bold mb-4 border-l-4 border-blue-600 pl-3">學生通訊資訊</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">按班級篩選</label>
+                        <select id="studentInfoClassSelect" class="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none">
+                            <option value="">-- 請選擇班級 --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">快速搜尋學生姓名</label>
+                        <input type="text" id="studentSearchInput" placeholder="輸入姓名(如: 王小明)" class="w-full p-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+                <div id="studentContactArea" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <p class="text-center text-gray-500 py-10 col-span-full">請選擇班級或輸入姓名搜尋學生資訊</p>
+                </div>
+            </div>
+
+            <!-- 分頁：歷史記錄 -->
+            <div id="historyPage" class="hidden bg-white rounded-xl shadow-md p-6">
+                <h3 class="text-xl font-bold mb-4 border-l-4 border-yellow-600 pl-3">點名記錄查詢</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <div>
+                        <label class="block text-sm font-bold mb-2">選擇班級</label>
+                        <select id="historyClassSelect" class="w-full p-3 border rounded-lg bg-gray-50">
+                            <option value="">-- 所有管理班級 --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold mb-2">篩選範圍</label>
+                        <select id="historyRangeSelect" class="w-full p-3 border rounded-lg bg-gray-50">
+                            <option value="today">今天</option>
+                            <option value="week">最近一周</option>
+                            <option value="month">最近一月</option>
+                            <option value="custom">自訂區間</option>
+                        </select>
+                    </div>
+                    <div id="customDateRange" class="hidden lg:col-span-1 space-y-2">
+                        <label class="block text-sm font-bold mb-2">區間設定 (起/訖)</label>
+                        <div class="flex gap-2">
+                            <input type="date" id="historyStartDate" class="w-1/2 p-2 border rounded text-xs">
+                            <input type="date" id="historyEndDate" class="w-1/2 p-2 border rounded text-xs">
+                        </div>
+                    </div>
+                    <div class="flex items-end">
+                        <button id="btnQueryHistory" class="w-full bg-purple-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-purple-700 transition">查詢紀錄</button>
+                    </div>
+                </div>
+                <div id="historyListArea" class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="bg-gray-100">
+                                <th class="p-3 border">日期</th>
+                                <th class="p-3 border">班級</th>
+                                <th class="p-3 border">點名老師</th>
+                                <th class="p-3 border">記錄詳情</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody">
+                            <tr><td colspan="4" class="p-10 text-center text-gray-400">點擊上方按鈕開始查詢</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 分頁：系統管理 -->
+            <div id="adminPage" class="hidden bg-white rounded-xl shadow-md p-6">
+                <h3 class="text-xl font-bold mb-4 border-l-4 border-red-600 pl-3">系統後台管理</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="border-2 border-dashed border-purple-200 p-6 rounded-xl text-center">
+                        <h4 class="text-lg font-bold mb-4 text-purple-700">匯入老師課表</h4>
+                        <input type="file" id="teacherFile" accept=".xlsx, .xls" class="hidden">
+                        <button id="btnImportTeacher" onclick="document.getElementById('teacherFile').click()" class="bg-purple-100 text-purple-700 px-6 py-3 rounded-lg font-bold hover:bg-purple-200 w-full mb-2 transition-all">選擇 Excel 檔案</button>
+                    </div>
+                    <div class="border-2 border-dashed border-green-200 p-6 rounded-xl text-center">
+                        <h4 class="text-lg font-bold mb-4 text-green-700">匯入學生名單</h4>
+                        <input type="file" id="studentFile" accept=".xlsx, .xls" class="hidden">
+                        <button id="btnImportStudent" onclick="document.getElementById('studentFile').click()" class="bg-green-100 text-green-700 px-6 py-3 rounded-lg font-bold hover:bg-green-200 w-full mb-2 transition-all">選擇 Excel 檔案</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, query, getDocs, addDoc, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+        let user = null;
+        let allTeachersData = [];
+        let allStudentsData = {};
+        let currentAttendanceRecords = {}; 
+        let globalHistoryLogs = []; // 用於歷史資料下載
+
+        const showMessage = (msg, type = "success") => {
+            const box = document.getElementById('messageBox');
+            box.innerText = msg;
+            box.className = `fixed top-4 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 rounded-lg shadow-xl text-white font-bold ${type === 'success' ? 'bg-green-600' : 'bg-red-600'}`;
+            box.classList.remove('hidden');
+            setTimeout(() => box.classList.add('hidden'), 3000);
+        };
+
+        const cleanStr = (str) => {
+            if (!str) return "";
+            return str.toString().trim().replace(/[\s\u3000]/g, '').replace(/班$/, '');
+        };
+
+        async function refreshData() {
+            if (!user) return;
+            try {
+                const tSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'teachers'));
+                allTeachersData = tSnap.docs.map(doc => doc.data());
+                const sSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'students'));
+                allStudentsData = {};
+                sSnap.docs.forEach(doc => {
+                    const data = doc.data();
+                    allStudentsData[cleanStr(data.className)] = { originalName: data.className, students: data.students };
+                });
+                const currentTeacher = localStorage.getItem('currentTeacher');
+                if (currentTeacher) refreshClassDropdowns(currentTeacher);
+            } catch (error) { console.error("Sync Error:", error); }
+        }
+
+        function refreshClassDropdowns(teacherName) {
+            const selectAtt = document.getElementById('classSelect');
+            const selectInfo = document.getElementById('studentInfoClassSelect');
+            const selectHist = document.getElementById('historyClassSelect');
+            const adminBadge = document.getElementById('adminBadge');
+            const btnAdmin = document.getElementById('btnTabAdmin');
+            
+            const teacherSearchKey = cleanStr(teacherName);
+            let myClasses = [];
+            let isAdmin = (teacherSearchKey === "管理員");
+
+            if (isAdmin) {
+                myClasses = Object.keys(allStudentsData).map(key => allStudentsData[key].originalName).sort();
+                adminBadge.classList.remove('hidden');
+                btnAdmin.classList.remove('hidden'); 
+            } else {
+                allTeachersData.forEach(t => {
+                    const nameInDb = cleanStr(t.teacherName || t.老師姓名 || t.老師 || '');
+                    if (nameInDb === teacherSearchKey) {
+                        const rawClassName = (t.className || t.上課班級 || t.班級 || '').toString();
+                        const splitClasses = rawClassName.split(/[藍,，、\s]+/).filter(c => c.trim());
+                        splitClasses.forEach(cls => {
+                            const cKey = cleanStr(cls);
+                            for (let dbClassKey in allStudentsData) {
+                                if (dbClassKey === cKey || dbClassKey.includes(cKey) || cKey.includes(dbClassKey)) {
+                                    myClasses.push(allStudentsData[dbClassKey].originalName);
+                                }
+                            }
+                        });
+                    }
+                });
+                myClasses = [...new Set(myClasses)].sort();
+                adminBadge.classList.add('hidden');
+                btnAdmin.classList.add('hidden'); 
+            }
+
+            selectAtt.innerHTML = `<option value="">-- 請選擇班級 --</option>`;
+            myClasses.forEach(cls => selectAtt.add(new Option(cls, cls)));
+
+            selectInfo.innerHTML = `<option value="">-- 請選擇班級 --</option>`;
+            if (isAdmin) selectInfo.add(new Option("-- 顯示所有班級學生 --", "ALL_CLASSES"));
+            myClasses.forEach(cls => selectInfo.add(new Option(cls, cls)));
+
+            selectHist.innerHTML = `<option value="">-- 所有管理班級 --</option>`;
+            myClasses.forEach(cls => selectHist.add(new Option(cls, cls)));
+        }
+
+        window.setStatus = (idx, status, btn) => {
+            currentAttendanceRecords[idx] = status;
+            const container = btn.parentElement;
+            container.querySelectorAll('button').forEach(b => {
+                b.className = b.className.replace(/active-(arrive|club|leave|absent)/g, '').trim();
+                b.classList.add('bg-gray-100', 'text-gray-500');
+            });
+            btn.classList.remove('bg-gray-100', 'text-gray-500');
+            const activeMap = { '到班': 'arrive', '社團/學輔': 'club', '請假': 'leave', '缺席': 'absent' };
+            btn.classList.add(`active-${activeMap[status]}`);
+        };
+
+        // 即時點名邏輯
+        document.getElementById('classSelect').onchange = (e) => {
+            const className = e.target.value;
+            const area = document.getElementById('studentListArea');
+            const submitArea = document.getElementById('submitArea');
+            currentAttendanceRecords = {}; 
+            if (!className) {
+                area.innerHTML = '<p class="text-center text-gray-500 py-10">請先選擇班級以載入名單</p>';
+                submitArea.classList.add('hidden');
+                return;
+            }
+            const data = allStudentsData[cleanStr(className)];
+            const students = data ? data.students : [];
+            if (students.length === 0) {
+                area.innerHTML = '<p class="text-center text-red-500 py-10">查無學生名單</p>';
+                submitArea.classList.add('hidden');
+                return;
+            }
+            area.innerHTML = students.map((s, idx) => {
+                const note = s.備註 || s.註記 || '';
+                currentAttendanceRecords[idx] = '到班';
+                return `
+                <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div class="flex-1">
+                            <div class="font-bold text-xl text-gray-800">${s.學生姓名 || s.姓名}</div>
+                            <div class="flex flex-wrap items-center gap-2 mt-1">
+                                <span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold">原始：${s.班級 || '未填'}</span>
+                                ${note ? `<span class="text-xs text-red-600 font-bold">※ ${note}</span>` : ''}
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 sm:flex sm:flex-nowrap gap-2">
+                            <button onclick="setStatus(${idx}, '到班', this)" class="status-btn px-3 py-2 rounded-lg active-arrive font-bold text-sm">到班</button>
+                            <button onclick="setStatus(${idx}, '社團/學輔', this)" class="status-btn px-3 py-2 rounded-lg bg-gray-100 text-gray-500 font-bold text-sm">社團/學輔</button>
+                            <button onclick="setStatus(${idx}, '請假', this)" class="status-btn px-3 py-2 rounded-lg bg-gray-100 text-gray-500 font-bold text-sm">請假</button>
+                            <button onclick="setStatus(${idx}, '缺席', this)" class="status-btn px-3 py-2 rounded-lg bg-gray-100 text-gray-500 font-bold text-sm">缺席</button>
+                        </div>
+                    </div>
+                </div>
+            `}).join('');
+            submitArea.classList.remove('hidden');
+        };
+
+        // 學生資訊搜尋邏輯
+        const studentInfoClassSelect = document.getElementById('studentInfoClassSelect');
+        const studentSearchInput = document.getElementById('studentSearchInput');
+        const studentContactArea = document.getElementById('studentContactArea');
+
+        const updateStudentInfoDisplay = () => {
+            const className = studentInfoClassSelect.value;
+            const searchTerm = studentSearchInput.value.trim();
+            let result = [];
+
+            if (className === "ALL_CLASSES") {
+                Object.keys(allStudentsData).forEach(key => {
+                    const cls = allStudentsData[key];
+                    cls.students.forEach(s => result.push({...s, _fromClass: cls.originalName}));
+                });
+            } else if (className) {
+                const cls = allStudentsData[cleanStr(className)];
+                if (cls) cls.students.forEach(s => result.push({...s, _fromClass: cls.originalName}));
+            } else if (searchTerm) {
+                const myAllowedClasses = Array.from(studentInfoClassSelect.options).map(o => o.value).filter(v => v && v !== "ALL_CLASSES");
+                myAllowedClasses.forEach(cName => {
+                    const cls = allStudentsData[cleanStr(cName)];
+                    if (cls) cls.students.forEach(s => result.push({...s, _fromClass: cls.originalName}));
+                });
+            } else {
+                studentContactArea.innerHTML = '<p class="text-center text-gray-500 py-10 col-span-full">請選擇班級或輸入姓名搜尋學生資訊</p>';
+                return;
+            }
+
+            if (searchTerm) {
+                result = result.filter(s => (s.學生姓名 || s.姓名 || "").toString().includes(searchTerm));
+            }
+
+            if (result.length === 0) {
+                studentContactArea.innerHTML = '<p class="text-center text-red-500 py-10 col-span-full">查無學生資訊</p>';
+                return;
+            }
+            studentContactArea.innerHTML = result.map(s => {
+                const phone = s.聯絡電話 || s.電話 || s.家長電話 || '未提供';
+                const village = s.放學里別 || s.里別 || '未註記';
+                return `
+                    <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm">
+                        <div class="flex justify-between items-start">
+                            <div class="font-bold text-lg text-blue-900">${s.學生姓名 || s.姓名} <span class="text-xs font-normal text-gray-500">(${s._fromClass || ''})</span></div>
+                            <span class="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-bold">里：${village}</span>
+                        </div>
+                        <div class="bg-white p-3 rounded-lg border border-blue-100 mt-2">
+                            <div class="text-xs text-gray-400 font-bold mb-1">聯絡電話</div>
+                            <div class="text-xl font-black text-blue-700">${phone}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        };
+        studentInfoClassSelect.onchange = updateStudentInfoDisplay;
+        studentSearchInput.oninput = updateStudentInfoDisplay;
+
+        // 歷史紀錄篩選邏輯
+        document.getElementById('historyRangeSelect').onchange = (e) => {
+            document.getElementById('customDateRange').classList.toggle('hidden', e.target.value !== 'custom');
+        };
+
+        // 下載單次記錄 Excel
+        window.downloadRecordExcel = (logIndex) => {
+            const log = globalHistoryLogs[logIndex];
+            if (!log) return;
+            const excelData = log.records.map(r => ({
+                "學生姓名": r.name,
+                "點名狀態": r.status,
+                "日期": log.date,
+                "上課班級": log.className,
+                "點名老師": log.teacher
+            }));
+            const worksheet = XLSX.utils.json_to_sheet(excelData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "點名紀錄");
+            XLSX.writeFile(workbook, `${log.date}_${log.className}_點名記錄.xlsx`);
+        };
+
+        document.getElementById('btnQueryHistory').onclick = async () => {
+            const histClass = document.getElementById('historyClassSelect').value;
+            const range = document.getElementById('historyRangeSelect').value;
+            const tableBody = document.getElementById('historyTableBody');
+            const currentTeacher = localStorage.getItem('currentTeacher');
+            const isSystemAdmin = (cleanStr(currentTeacher) === "管理員");
+            
+            tableBody.innerHTML = '<tr><td colspan="4" class="p-10 text-center">查詢中...</td></tr>';
+            
+            try {
+                const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'history'));
+                const snap = await getDocs(q);
+                let logs = snap.docs.map(doc => doc.data());
+                
+                // 權限與身份過濾
+                if (isSystemAdmin) {
+                    // 管理員身分：如果是選定特定班級則過濾班級，否則顯示全部
+                    if (histClass) {
+                        logs = logs.filter(l => l.className === histClass);
+                    }
+                } else {
+                    // 一般老師身分：
+                    // 1. 必須是老師自己點名的記錄 (修正點)
+                    // 2. 必須是老師有權限管理的班級
+                    const myAllowedClasses = Array.from(document.getElementById('historyClassSelect').options).map(o => o.value).filter(v => v);
+                    
+                    logs = logs.filter(l => {
+                        const isMyRecord = cleanStr(l.teacher) === cleanStr(currentTeacher);
+                        const isMyClass = myAllowedClasses.includes(l.className);
+                        const isSelectedClass = histClass ? (l.className === histClass) : true;
+                        return isMyRecord && isMyClass && isSelectedClass;
+                    });
+                }
+
+                // 時間範圍過濾
+                const now = new Date();
+                if (range === 'today') {
+                    const todayStr = now.toLocaleDateString('zh-TW');
+                    logs = logs.filter(l => l.date === todayStr);
+                } else if (range === 'week') {
+                    const lastWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                    logs = logs.filter(l => new Date(l.date) >= lastWeek);
+                } else if (range === 'month') {
+                    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+                    logs = logs.filter(l => new Date(l.date) >= lastMonth);
+                } else if (range === 'custom') {
+                    const startInput = document.getElementById('historyStartDate').value;
+                    const endInput = document.getElementById('historyEndDate').value;
+                    if (startInput && endInput) {
+                        const start = new Date(startInput);
+                        const end = new Date(endInput);
+                        end.setHours(23, 59, 59, 999); // 包含結束日當天
+                        logs = logs.filter(l => {
+                            const d = new Date(l.date);
+                            return d >= start && d <= end;
+                        });
+                    }
+                }
+
+                logs.sort((a, b) => b.timestamp - a.timestamp);
+                globalHistoryLogs = logs; // 存入全域供下載使用
+
+                if (logs.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="4" class="p-10 text-center text-gray-400">查無記錄</td></tr>';
+                    return;
+                }
+
+                tableBody.innerHTML = logs.map((l, idx) => `
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="p-3 border">${l.date}</td>
+                        <td class="p-3 border font-bold text-purple-700">${l.className}</td>
+                        <td class="p-3 border">${l.teacher}</td>
+                        <td class="p-3 border">
+                            <div class="flex flex-col gap-2">
+                                <details class="cursor-pointer">
+                                    <summary class="text-blue-600 font-bold hover:underline">查看狀態</summary>
+                                    <div class="mt-2 text-xs grid grid-cols-2 gap-1 bg-gray-50 p-2 rounded max-h-40 overflow-y-auto">
+                                        ${l.records.map(r => `<div>${r.name}: <span class="${r.status === '到班' ? 'text-green-600' : 'text-red-500'} font-bold">${r.status}</span></div>`).join('')}
+                                    </div>
+                                </details>
+                                <button onclick="downloadRecordExcel(${idx})" class="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-1 rounded font-bold hover:bg-green-100 self-start">下載 Excel</button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (err) { 
+                console.error(err);
+                showMessage("查詢失敗", "error"); 
+            }
+        };
+
+        // 登入與基礎初始化
+        const handleLogin = () => {
+            const name = document.getElementById('loginTeacherInput').value.trim();
+            if (!name) { showMessage("請輸入姓名", "error"); return; }
+            localStorage.setItem('currentTeacher', name);
+            document.getElementById('displayTeacherName').innerText = name;
+            refreshClassDropdowns(name);
+            document.getElementById('loginSection').classList.add('hidden');
+            document.getElementById('mainSection').classList.remove('hidden');
+            showMessage("登入成功");
+        };
+
+        const processImport = async (file, type) => {
+            if (!user) return;
+            const btn = document.getElementById(type === 'teachers' ? 'btnImportTeacher' : 'btnImportStudent');
+            const originalText = btn.innerText;
+            btn.innerText = "處理中..."; btn.disabled = true;
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    if (type === 'teachers') {
+                        const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                        const old = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'teachers'));
+                        for (const d of old.docs) await deleteDoc(d.ref);
+                        for (const item of json) await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'teachers'), item);
+                    } else {
+                        const old = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'students'));
+                        for (const d of old.docs) await deleteDoc(d.ref);
+                        for (const name of workbook.SheetNames) {
+                            const json = XLSX.utils.sheet_to_json(workbook.Sheets[name]);
+                            if (json.length > 0) await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'students'), { className: name, students: json, updateAt: serverTimestamp() });
+                        }
+                    }
+                    await refreshData();
+                    showMessage("匯入成功");
+                } catch (err) { showMessage("匯入失敗", "error"); }
+                finally { btn.innerText = originalText; btn.disabled = false; }
+            };
+            reader.readAsArrayBuffer(file);
+        };
+
+        document.getElementById('btnSubmitAttendance').onclick = async () => {
+            const className = document.getElementById('classSelect').value;
+            const data = allStudentsData[cleanStr(className)];
+            const students = data ? data.students : [];
+            const records = students.map((s, idx) => ({ name: s.學生姓名 || s.姓名, status: currentAttendanceRecords[idx] || '到班' }));
+            try {
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'history'), {
+                    date: new Date().toLocaleDateString('zh-TW'),
+                    className: className,
+                    teacher: localStorage.getItem('currentTeacher'),
+                    records: records,
+                    timestamp: serverTimestamp()
+                });
+                showMessage("點名資料已提交");
+                document.getElementById('classSelect').value = "";
+                document.getElementById('studentListArea').innerHTML = '<p class="text-center text-gray-500 py-10">點名完成！</p>';
+                document.getElementById('submitArea').classList.add('hidden');
+            } catch (err) { showMessage("提交失敗", "error"); }
+        };
+
+        const init = async () => {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else { await signInAnonymously(auth); }
+            onAuthStateChanged(auth, async (u) => {
+                user = u;
+                if (user) {
+                    await refreshData();
+                    const saved = localStorage.getItem('currentTeacher');
+                    if (saved) {
+                        document.getElementById('displayTeacherName').innerText = saved;
+                        document.getElementById('loginSection').classList.add('hidden');
+                        document.getElementById('mainSection').classList.remove('hidden');
+                        refreshClassDropdowns(saved);
+                    }
+                }
+            });
+            document.getElementById('btnLogin').onclick = handleLogin;
+            document.getElementById('btnLogout').onclick = () => { localStorage.removeItem('currentTeacher'); location.reload(); };
+            const tabs = ['Attendance', 'Students', 'History', 'Admin'];
+            tabs.forEach(t => {
+                document.getElementById(`btnTab${t}`).onclick = () => {
+                    if (t === 'Admin' && cleanStr(localStorage.getItem('currentTeacher')) !== "管理員") {
+                        showMessage("權限不足", "error"); return;
+                    }
+                    tabs.forEach(x => {
+                        document.getElementById(`${x.toLowerCase()}Page`).classList.add('hidden');
+                        document.getElementById(`btnTab${x}`).classList.remove('active-tab');
+                    });
+                    document.getElementById(`${t.toLowerCase()}Page`).classList.remove('hidden');
+                    document.getElementById(`btnTab${t}`).classList.add('active-tab');
+                };
+            });
+            document.getElementById('teacherFile').onchange = (e) => processImport(e.target.files[0], 'teachers');
+            document.getElementById('studentFile').onchange = (e) => processImport(e.target.files[0], 'students');
+        };
+        init();
+    </script>
+</body>
+</html>
