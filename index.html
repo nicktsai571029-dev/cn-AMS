@@ -3,32 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- 手機端 APP 圖標設定 (Add to Home Screen) -->
     <title>課後班點名管理系統</title>
     
-    <!-- 生成「課後班」字樣的圖標 -->
-    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%237c3aed%22/><text x=%2250%%22 y=%2250%%22 dominant-baseline=%22central%22 text-anchor=%22middle%22 font-family=%22serif%22 font-weight=%22bold%22 font-size=%2235%22 fill=%22white%22>課後班</text></svg>">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%237c3aed%22/><text x=%2250%%22 y=%2250%%22 dominant-baseline=%22central%22 text-anchor=%22middle%22 font-family=%22serif%22 font-weight=%22bold%22 font-size=%2235%22 fill=%22white%22>課後班</text></svg>">
+    <!-- 修正後的手機圖標設定：縮小字體以容納三個中文字 -->
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%237c3aed%22/><text x=%2250%22 y=%2253%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 font-family=%22sans-serif%22 font-weight=%22bold%22 font-size=%2228%22 fill=%22white%22>課後班</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%237c3aed%22/><text x=%2250%22 y=%2253%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 font-family=%22sans-serif%22 font-weight=%22bold%22 font-size=%2228%22 fill=%22white%22>課後班</text></svg>">
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
-        /* 基礎樣式設定 */
         body { font-family: "標楷體", "DFKai-SB", serif; background-color: #f3f4f6; }
         .active-tab { border-bottom: 4px solid #7c3aed; color: #7c3aed; font-weight: bold; }
         .hidden { display: none; }
-        
-        /* 視覺設定 */
         .login-card { border-top: 8px solid #7c3aed; }
         .title-purple { color: #6b21a8; }
         .title-bright-blue { color: #4A4AFF; } 
-        
         .status-btn { transition: all 0.2s; border: 2px solid transparent; }
         .status-btn.active-arrive { background-color: #10b981; color: white; border-color: #059669; transform: scale(1.05); }
         .status-btn.active-club { background-color: #3b82f6; color: white; border-color: #2563eb; transform: scale(1.05); }
         .status-btn.active-leave { background-color: #f59e0b; color: white; border-color: #d97706; transform: scale(1.05); }
         .status-btn.active-absent { background-color: #ef4444; color: white; border-color: #dc2626; transform: scale(1.05); }
-        
         .container-max { max-width: 1200px; margin: 0 auto; }
         .nav-scroll::-webkit-scrollbar { height: 4px; }
         .nav-scroll::-webkit-scrollbar-thumb { background: #ddd; border-radius: 10px; }
@@ -183,7 +177,7 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, collection, query, getDocs, addDoc, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Firebase Configuration (保持原樣)
+        // Firebase Configuration
         const firebaseConfig = {
             apiKey: "AIzaSyDM14sZDvtCqK0vJEpYzK_sZaVF_dR1u4Q",
             authDomain: "cn-ams.firebaseapp.com",
@@ -339,13 +333,10 @@
             submitArea.classList.remove('hidden');
         };
 
-        const studentInfoClassSelect = document.getElementById('studentInfoClassSelect');
-        const studentSearchInput = document.getElementById('studentSearchInput');
-        const studentContactArea = document.getElementById('studentContactArea');
-
         const updateStudentInfoDisplay = () => {
-            const className = studentInfoClassSelect.value;
-            const searchTerm = studentSearchInput.value.trim();
+            const className = document.getElementById('studentInfoClassSelect').value;
+            const searchTerm = document.getElementById('studentSearchInput').value.trim();
+            const studentContactArea = document.getElementById('studentContactArea');
             let result = [];
 
             if (className === "ALL_CLASSES") {
@@ -357,7 +348,7 @@
                 const cls = allStudentsData[cleanStr(className)];
                 if (cls) cls.students.forEach(s => result.push({...s, _fromClass: cls.originalName}));
             } else if (searchTerm) {
-                const myAllowedClasses = Array.from(studentInfoClassSelect.options).map(o => o.value).filter(v => v && v !== "ALL_CLASSES");
+                const myAllowedClasses = Array.from(document.getElementById('studentInfoClassSelect').options).map(o => o.value).filter(v => v && v !== "ALL_CLASSES");
                 myAllowedClasses.forEach(cName => {
                     const cls = allStudentsData[cleanStr(cName)];
                     if (cls) cls.students.forEach(s => result.push({...s, _fromClass: cls.originalName}));
@@ -392,8 +383,8 @@
                 `;
             }).join('');
         };
-        studentInfoClassSelect.onchange = updateStudentInfoDisplay;
-        studentSearchInput.oninput = updateStudentInfoDisplay;
+        document.getElementById('studentInfoClassSelect').onchange = updateStudentInfoDisplay;
+        document.getElementById('studentSearchInput').oninput = updateStudentInfoDisplay;
 
         document.getElementById('historyRangeSelect').onchange = (e) => {
             document.getElementById('customDateRange').classList.toggle('hidden', e.target.value !== 'custom');
@@ -565,7 +556,6 @@
             } catch (e) {
                 console.warn("Custom token auth failed, falling back to anonymous:", e.message);
             }
-            
             try {
                 await signInAnonymously(auth);
             } catch (e) {
