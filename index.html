@@ -3,7 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- 手機端 APP 圖標設定 (Add to Home Screen) -->
     <title>課後班點名管理系統</title>
+    
+    <!-- 生成「課後班」字樣的圖標 -->
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%237c3aed%22/><text x=%2250%%22 y=%2250%%22 dominant-baseline=%22central%22 text-anchor=%22middle%22 font-family=%22serif%22 font-weight=%22bold%22 font-size=%2235%22 fill=%22white%22>課後班</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%237c3aed%22/><text x=%2250%%22 y=%2250%%22 dominant-baseline=%22central%22 text-anchor=%22middle%22 font-family=%22serif%22 font-weight=%22bold%22 font-size=%2235%22 fill=%22white%22>課後班</text></svg>">
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
@@ -177,7 +183,7 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, collection, query, getDocs, addDoc, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Firebase Configuration
+        // Firebase Configuration (保持原樣)
         const firebaseConfig = {
             apiKey: "AIzaSyDM14sZDvtCqK0vJEpYzK_sZaVF_dR1u4Q",
             authDomain: "cn-ams.firebaseapp.com",
@@ -291,7 +297,6 @@
             btn.classList.add(`active-${activeMap[status]}`);
         };
 
-        // 即時點名介面產生
         document.getElementById('classSelect').onchange = (e) => {
             const className = e.target.value;
             const area = document.getElementById('studentListArea');
@@ -551,23 +556,18 @@
             }
         };
 
-        // Simplified Authentication Wrapper
         const initAuth = async () => {
             try {
-                // Priority: Use the system token if available
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
-                    console.log("Custom token auth successful");
                     return;
                 }
             } catch (e) {
                 console.warn("Custom token auth failed, falling back to anonymous:", e.message);
             }
             
-            // Fallback: Always try anonymous
             try {
                 await signInAnonymously(auth);
-                console.log("Anonymous auth successful");
             } catch (e) {
                 console.error("Critical Auth Error:", e.message);
                 throw e;
@@ -575,7 +575,6 @@
         };
 
         const init = async () => {
-            // Setup listener first
             onAuthStateChanged(auth, async (u) => {
                 user = u;
                 if (user) {
@@ -590,7 +589,6 @@
                 }
             });
 
-            // Start authentication immediately
             initAuth().catch(err => {
                 showMessage("系統連線失敗，請重新整理頁面", "error");
             });
@@ -631,7 +629,6 @@
             document.getElementById('studentFile').onchange = (e) => processImport(e.target.files[0], 'students');
         };
 
-        // Ensure DOM is ready
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', init);
         } else {
@@ -640,4 +637,3 @@
     </script>
 </body>
 </html>
-
